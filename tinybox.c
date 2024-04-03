@@ -27,6 +27,8 @@ int run();
 int cloneProcess(int (*run)());
 int unmapFileSystems();
 int configureCgroups();
+int limitProcesses();
+int limitMemory();
 int writeRule(const char*, const char*);
 uint8_t* stackMemory();
 static int pivot_root(const char*, const char*);
@@ -36,7 +38,7 @@ static int pivot_root(const char* newRoot, const char* oldRoot) {
 }
 
 int run() {
-    //mapFilesystems();
+    mapFilesystems();
     char *procName = "/bin/sh";
     char *procArgs[2] = {(char *)procName, (char *)0};
     printf("pid: %d , spwning new shell via execvp call ... \n", getpid());
@@ -131,8 +133,8 @@ char* concatPaths(char *container, char *stra, char *strb) {
     return container;
 }
 
-int configureCgroups() {
-    char *cgroupFolder = "/sys/fs/cgroup/pids/tinybox/";
+int limitProcesses() {
+    char *cgroupFolder = "/sys/fs/cgroup/pids/tinyboxcont/";
     char pidsMax[PATH_MAX];
     char notifyRelease[PATH_MAX];
     char procs[PATH_MAX];
@@ -145,6 +147,25 @@ int configureCgroups() {
     writeRule(concatPaths(pidsMax, cgroupFolder, "pids.max"), "5");
     writeRule(concatPaths(notifyRelease, cgroupFolder, "notify_on_release"), "1");
     writeRule(concatPaths(procs, cgroupFolder, "cgroup.procs"), pidStr);
+}
+
+int limitMemory() {
+    char *cgroupFolder = "/sys/fs/cgroup/memory/tinyboxcont/";
+    char procs[PATH_MAX];
+    char notifyRelease[PATH_MAX];
+    char limitInBytes[PATH_MAX];
+    char *pidStr = (char*)malloc(12);
+    sprintf(pidStr, "%d", getpid());
+
+    mkdir(cgroupFolder, S_IRUSR | S_IWUSR);
+    writeRule(concatPaths(procs, cgroupFolder, "cgroup.procs"), pidStr);
+    writeRule(concatPaths(notifyRelease, cgroupFolder, "notify_on_release"), "1");
+    writeRule(concatPaths(limitInBytes, cgroupFolder, "memory.limit_in_bytes"), "1M");
+}
+
+int configureCgroups() {
+    limitProcesses();
+    limitMemory();
 }
 
 int setupRootChroot() {
@@ -163,7 +184,7 @@ int jail() {
     setHostname(hostname);
     setupEnv();
     setupRoot();
-    mapFilesystems();
+    //mapFilesystems();
     cloneProcess(run);
     unmapFileSystems();
 }
